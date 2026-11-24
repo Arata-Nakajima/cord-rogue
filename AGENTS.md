@@ -1,3 +1,19 @@
+# Cord Rogue プロジェクト指示（全エージェント共通）
+
+このリポジトリで作業するエージェント（Antigravity含む）は、作業開始時に必ず以下を行うこと:
+
+1. `git pull` で最新にする
+2. `docs/CURRENT_TASK.md` を読む。それが現在のタスク指示書である。ユーザーから短い指示（例:「最新タスクを実行して」）しかない場合でも、このファイルの内容を実行すること
+3. 作業が終わったら `npm test` を実行し、結果とともにコミットして `git push` する
+4. タスク完了時は `docs/CURRENT_TASK.md` の末尾の「実施報告」欄に、実施内容・テスト結果・残課題を追記してから push する
+
+プロジェクトの制約:
+- サーバー通信・外部APIは使わない。計算とデータはすべて端末内
+- 核ロジック `src/*.js` は変更禁止（画面側から import して使う）
+- 設計判断は `docs/WORKFLOW.md` と設計メモが正
+
+---
+
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
 ## Expo has changed — do not trust your training data
