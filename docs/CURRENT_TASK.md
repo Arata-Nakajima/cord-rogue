@@ -54,3 +54,12 @@ TypeScriptから `.js` を import するために必要な最小限の設定追�
 - 実施内容: `src/cameraGas.js` を新規追加。MediaPipe Face Landmarker（478点）の出力から gas.js が必要とする13点を取り出す変換（点番号は公開資料で照合済み）、点の不足チェック、頭の向き・傾き・顔の大きさの撮影チェック（問題があればスコアを出さず撮り直し）、GAS計算までを1関数 `gasFromMediaPipe` に一本化。ML Kitは鼻幅の点が取れないため不採用とし、理由を docs/CAMERA_GAS.md に記録
 - テスト結果: `npm test` 27件全通過（新規5件）
 - 残課題: 実際の検出ライブラリの組み込みはネイティブ部品のため開発ビルドが必要（Expo Go不可）。手順と呼び出し方は docs/CAMERA_GAS.md に記載済み
+
+---
+
+## 追加作業（2026-11-25、Claudeが直接実施）: EAS開発ビルドの準備
+
+### 実施報告
+- 実施内容: 開発ビルド方式はユーザーがEAS Build（クラウド）を選択。`expo-dev-client` を追加し、`eas.json`（development = developmentClient: true / internal配布）を作成。ユーザーがPCで実行する手順書を docs/DEV_BUILD_EAS.md に用意（Expoアカウント作成→eas login→eas build→QRでインストール→expo start --dev-client）
+- テスト結果: `npm test` 27件全通過、`npx tsc --noEmit` エラーなし、`npx expo export --platform android` 成功
+- 残課題: ビルド実行そのものはユーザーのExpoアカウントが必要なためPC側での実施待ち。開発ビルドが入ったら次はMediaPipe顔検出の組み込み
