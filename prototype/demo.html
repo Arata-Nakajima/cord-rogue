@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cord Rogue プロトタイプ</title>
+<style>
+  body { font-family: sans-serif; max-width: 640px; margin: 16px auto; padding: 0 12px; }
+  section { border: 1px solid #ccc; border-radius: 8px; padding: 12px; margin: 12px 0; }
+  label { display: block; margin: 8px 0; }
+  button { padding: 8px 14px; margin: 4px 2px; }
+  .match { border-top: 1px solid #eee; padding: 8px 0; }
+  #result { font-size: 1.2em; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>Cord Rogue プロトタイプ</h1>
+<p>最終形はスマホアプリですが、これは動きを試すための仮画面です。本体ロジック（src/）をそのまま読み込んでいます。</p>
+
+<section>
+  <h2>1. 初期設定とスコア測定</h2>
+  <label>GAS（50〜100）: <input id="gas" type="number" min="50" max="100" value="80"></label>
+  <label>相手に求めるGASの下限: <input id="cutoff" type="number" min="50" max="100" value="50"></label>
+  <label>最寄り駅: <input id="station" type="text" value="梅田"></label>
+  <div id="questions"></div>
+  <button id="calc">MVを計算して相手を探す</button>
+  <p id="result"></p>
+</section>
+
+<section>
+  <h2>2. 相手一覧（MVの近い順）</h2>
+  <div id="matches">まだ計算していません</div>
+</section>
+
+<section>
+  <h2>3. アポイント調整</h2>
+  <div id="appt">相手一覧から1人選んでください</div>
+</section>
+
+<script type="module">
+import { createUser } from "../src/user.js";
+import { calculateMV } from "../src/mv.js";
+import { HAPPINESS_QUESTIONS, scoreHappiness } from "../src/questionnaire.js";
+import { demoUsers, DEMO_PLACES } from "../src/demo.js";
+import { rankMatches, HAPPINESS_CUTOFF } from "../src/matching.js";
+import { createAppointment, markArrived, closeAppointment, recordDateConsent, dateAgreed } from "../src/appointment.js";
+
+const qBox = document.getElementById("questions");
+HAPPINESS_QUESTIONS.forEach((q, i) => {
+  const label = document.createElement("label");
+  label.textContent = q + " ";
+  const sel = document.createElement("select");
+  sel.id = "q" + i;
+  for (let v = 1; v <= 5; v++) sel.add(new Option(v, v, v === 3, v === 3));
+  label.appendChild(sel);
+  qBox.appendChild(label);
+});
+
+let me = null;
+document.getElementById("calc").onclick = () => {
+  const answers = HAPPINESS_QUESTIONS.map((_, i) => Number(document.getElementById("q" + i).value));
+  me = createUser({
+    id: "me",
+    gas: Number(document.getElementById("gas").value),
+    gasCutoff: Number(document.getElementById("cutoff").value),
+    nearestStation: document.getElementById("station").value,
+    happiness: scoreHappiness(answers),
+  });
+  const mv = calculateMV(me);
+  document.getElementById("result").textContent =
+    me.happiness < HAPPINESS_CUTOFF
+      ? `幸福度 ${me.happiness}（足切り ${HAPPINESS_CUTOFF} 未満のため、紹介できる相手がいません）`
+      : `あなたのMV: ${mv}（GAS ${me.gas} / 幸福度 ${me.happiness}）`;
+  const list = document.getElementById("matches");
+  list.innerHTML = "";
+  const ranked = rankMatches(me, demoUsers());
+  if (!ranked.length) list.textContent = "紹介できる相手がいません";
+  for (const r of ranked) {
+    const div = document.createElement("div");
+    div.className = "match";
+    div.textContent = `${r.user.displayName}（最寄り: ${r.user.nearestStation}） MV ${r.mv}（差 ${r.mvDiff}） `;
+    const btn = document.createElement("button");
+    btn.textContent = "この人とアポイント調整";
+    btn.onclick = () => startAppointment(r.user);
+    div.appendChild(btn);
+    list.appendChild(div);
+  }
+};
+
+function startAppointment(other) {
+  const box = document.getElementById("appt");
+  const candidates = DEMO_PLACES.map((p, i) => ({ placeId: p.id, rankByA: i, rankByB: (DEMO_PLACES.length - 1 - i) }));
+  const slots = ["2026-12-05T11:00", "2026-12-05T14:00"];
+  let appt = createAppointment(me.id, other.id, candidates, slots, slots);
+  if (appt.status === "no_common_slot") { box.textContent = "共通の空き時間がありません"; return; }
+  const placeName = DEMO_PLACES.find((p) => p.id === appt.placeId).name;
+  box.innerHTML = `<p>決定: ${appt.startsAt.replace("T", " ")} / ${placeName}（あなたと相手の希望順位の合計が最小の場所）</p>`;
+  const arriveBtn = document.createElement("button");
+  arriveBtn.textContent = "両者とも到着したことにする";
+  arriveBtn.onclick = () => {
+    appt = markArrived(markArrived(appt, "A"), "B");
+    const closed = closeAppointment(appt).appointment;
+    box.innerHTML += `<p>対面証明OK（状態: ${closed.status}）。このままデートに進みますか？</p>`;
+    const yes = document.createElement("button");
+    yes.textContent = "自分: 進む / 相手: 進む";
+    yes.onclick = () => {
+      appt = recordDateConsent(recordDateConsent(appt, "A", true), "B", true);
+      box.innerHTML += `<p>結果: ${dateAgreed(appt) ? "両者合意。デート成立" : "不成立"}</p>`;
+    };
+    const no = document.createElement("button");
+    no.textContent = "自分: 進む / 相手: 断る";
+    no.onclick = () => {
+      appt = recordDateConsent(recordDateConsent(appt, "A", true), "B", false);
+      box.innerHTML += "<p>結果: 不成立（断った側は、相手から連絡先を尋ねられた場合などに規約違反報告ができます）</p>";
+    };
+    box.append(yes, no);
+  };
+  box.appendChild(arriveBtn);
+}
+</script>
+</body>
+</html>

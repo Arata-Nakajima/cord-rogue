@@ -1,0 +1,1 @@
+{"description":"Cord Rogue - matching by GAS and happiness score, on-device and serverless","name":"cord-rogue","private":true,"scripts":{"test":"node --test"},"type":"module","version":"0.1.0"}
